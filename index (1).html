@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bharat Zone — Device Return Dashboard</title>
+<style>
+:root {
+  --bg: #0b0c14;
+  --panel: #14151f;
+  --row-a: #171824;
+  --row-b: #0f1019;
+  --border: #262838;
+  --text: #ffffff;
+  --text-dim: #9497ab;
+  --text-mute: #5c5f72;
+  --accent: #FF1465;
+  --accent-soft: rgba(255,20,101,0.14);
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+body { padding: 28px 20px 60px; }
+.wrap { max-width: 1180px; margin: 0 auto; }
+.header { display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:22px; }
+.header h1 { font-size:22px; font-weight:700; margin:0 0 4px; }
+.header p { margin:0; color:var(--text-dim); font-size:13.5px; }
+.accent-bar { width:34px; height:4px; background:var(--accent); border-radius:2px; margin-bottom:10px; }
+.summary { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:20px; }
+.summary .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+.summary .card .label { font-size:12px; color:var(--text-dim); margin-bottom:6px; }
+.summary .card .value { font-size:22px; font-weight:700; }
+.summary .card.accent .value { color:var(--accent); }
+.controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+.zone-tabs { display:flex; gap:6px; flex-wrap:wrap; flex:1; }
+.zone-tab { background:var(--panel); border:1px solid var(--border); color:var(--text-dim); padding:7px 13px; border-radius:999px; font-size:13px; cursor:pointer; }
+.zone-tab.active { background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:600; }
+.search-box { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 12px; color:var(--text); font-size:13px; min-width:200px; outline:none; }
+.refresh-btn { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:9px 16px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.table-wrap { background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+.scroll-x { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; min-width:720px; }
+thead th { text-align:left; font-size:12px; font-weight:700; padding:14px 18px; border-bottom:1px solid var(--border); white-space:nowrap; }
+thead th.num { text-align:right; }
+tbody td { padding:13px 18px; font-size:13.5px; border-bottom:1px solid var(--border); vertical-align:top; }
+tbody tr:last-child td { border-bottom:none; }
+tbody tr:nth-child(odd) { background:var(--row-a); }
+tbody tr:nth-child(even) { background:var(--row-b); }
+td.name { font-weight:600; }
+td.zone-cell { color:var(--text-dim); }
+td.num { text-align:right; font-variant-numeric:tabular-nums; }
+td.remark { color:var(--text-dim); font-size:12.5px; max-width:260px; }
+.zone-pill { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; background:#21232f; color:var(--text-dim); border:1px solid var(--border); }
+.footer-note { margin-top:14px; color:var(--text-mute); font-size:12px; }
+.status { color:var(--text-dim); font-size:12.5px; margin-bottom:10px; }
+.empty-state { padding:40px; text-align:center; color:var(--text-mute); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div>
+      <div class="accent-bar"></div>
+      <h1>Bharat Zone — Device Return Dashboard</h1>
+      <p>Meerut · Meerut++ · Agra · Agra++ · Bareilly · Bareilly++</p>
+    </div>
+    <button class="refresh-btn" onclick="loadData()">↻ Refresh Data</button>
+  </div>
+
+  <div class="summary">
+    <div class="card"><div class="label">Partners shown</div><div class="value" id="sumPartners">0</div></div>
+    <div class="card"><div class="label">Devices to be returned</div><div class="value" id="sumToReturn">0</div></div>
+    <div class="card"><div class="label">Devices collected</div><div class="value" id="sumCollected">0</div></div>
+    <div class="card accent"><div class="label">Active user base</div><div class="value" id="sumActive">0</div></div>
+  </div>
+
+  <div class="status" id="statusLine">Data load ho raha hai...</div>
+
+  <div class="controls">
+    <div class="zone-tabs" id="zoneTabs"></div>
+    <input class="search-box" id="searchBox" placeholder="Search partner name..." oninput="render()">
+  </div>
+
+  <div class="table-wrap">
+    <div class="scroll-x">
+      <table>
+        <thead>
+          <tr>
+            <th>Partner Name</th>
+            <th>Zone</th>
+            <th>Remarks</th>
+            <th class="num">Devices Collected</th>
+            <th class="num">Devices to be Returned</th>
+            <th class="num">Active Base</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="footer-note">Data seedhe csp-data.csv file se aata hai — CSV edit karo, GitHub par commit karo, phir yahan "Refresh Data" dabao.</div>
+</div>
+
+<script>
+// IMPORTANT: yeh URL apni GitHub repo ki csp-data.csv file ka "raw" link hoga.
+// Upload karne ke baad is line ko us raw link se replace karna hai.
+const CSV_URL = "csp-data.csv";
+
+const ZONES = ["All", "Meerut++", "Meerut City", "Agra", "Agra++", "Bareilly", "Bareilly++"];
+let allRows = [];
+let activeZone = "All";
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i+1] === '"') { field += '"'; i++; }
+        else { inQuotes = false; }
+      } else field += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i+1] === '\n') i++;
+        row.push(field); field = '';
+        if (row.length > 1 || row[0] !== '') rows.push(row);
+        row = [];
+      } else field += c;
+    }
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+async function loadData() {
+  document.getElementById('statusLine').textContent = 'Data load ho raha hai...';
+  try {
+    const res = await fetch(CSV_URL + (CSV_URL.startsWith('http') ? ('?t=' + Date.now()) : ''));
+    const text = await res.text();
+    const rows = parseCSV(text);
+    const header = rows[0].map(h => h.trim());
+    allRows = rows.slice(1).filter(r => r.length > 1 || r[0]).map(r => {
+      const obj = {};
+      header.forEach((h, idx) => obj[h] = r[idx] !== undefined ? r[idx] : '');
+      obj.collected = parseInt(obj.collected) || 0;
+      obj.toReturn = parseInt(obj.toReturn) || 0;
+      obj.active = parseInt(obj.active) || 0;
+      return obj;
+    });
+    document.getElementById('statusLine').textContent = 'Last updated: ' + new Date().toLocaleString();
+    render();
+  } catch (e) {
+    document.getElementById('statusLine').textContent = 'Data load nahi ho paaya. CSV_URL check karo.';
+  }
+}
+
+function renderTabs() {
+  const el = document.getElementById('zoneTabs');
+  el.innerHTML = '';
+  ZONES.forEach(z => {
+    const btn = document.createElement('button');
+    btn.className = 'zone-tab' + (z === activeZone ? ' active' : '');
+    btn.textContent = z;
+    btn.onclick = () => { activeZone = z; render(); };
+    el.appendChild(btn);
+  });
+}
+
+function render() {
+  renderTabs();
+  const search = document.getElementById('searchBox').value.trim().toLowerCase();
+  let rows = allRows;
+  if (activeZone !== 'All') rows = rows.filter(r => r.zone === activeZone);
+  if (search) rows = rows.filter(r => r.name.toLowerCase().includes(search));
+
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">No partners found.</div></td></tr>';
+  } else {
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="name">${escapeHtml(r.name)}</td>
+        <td class="zone-cell"><span class="zone-pill">${escapeHtml(r.zone)}</span></td>
+        <td class="remark">${escapeHtml(r.remark || '—')}</td>
+        <td class="num">${r.collected}</td>
+        <td class="num">${r.toReturn}</td>
+        <td class="num">${r.active}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+  document.getElementById('sumPartners').textContent = rows.length;
+  document.getElementById('sumToReturn').textContent = rows.reduce((a,b) => a + (b.toReturn||0), 0).toLocaleString();
+  document.getElementById('sumCollected').textContent = rows.reduce((a,b) => a + (b.collected||0), 0).toLocaleString();
+  document.getElementById('sumActive').textContent = rows.reduce((a,b) => a + (b.active||0), 0).toLocaleString();
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : s;
+  return d.innerHTML;
+}
+
+loadData();
+</script>
+</body>
+</html>
